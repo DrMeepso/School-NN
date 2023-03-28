@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car</title>
+</head>
+<body>
+    
+    <canvas id="Render"></canvas>
+
+</body>
+</html>
+
+<style>
+
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: #000;
+    }
+
+    canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: -1;
+    }
+
+</style>
+
+<script>
+
+    const Canvas = document.getElementById("Render");
+    const ctx = Canvas.getContext("2d");
+
+    Canvas.width = window.innerWidth;
+    Canvas.height = window.innerHeight;
+
+    window.addEventListener("resize", () => {
+        Canvas.width = window.innerWidth;
+        Canvas.height = window.innerHeight;
+    });
+
+    // stop context menu
+    Canvas.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+    });
+
+</script>
+
+<script src="neural.js"></script>
+<script src="classes.js"></script>
+<script src="script.js"></script>
