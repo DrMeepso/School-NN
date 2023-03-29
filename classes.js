@@ -53,6 +53,8 @@ class Line {
 
   draw(context) {
     context.strokeStyle = this.color;
+    // make line width 2 pixels
+    context.lineWidth = 3;
     context.beginPath();
     context.moveTo(this.start.x + WorldCamera.x, this.start.y + WorldCamera.y);
     context.lineTo(this.end.x + WorldCamera.x, this.end.y + WorldCamera.y);
@@ -289,7 +291,6 @@ class CompeativeNeuralNetwork {
 
   constructor(nn) {
     this.nn = nn;
-    this.car.angle = DegToRad(-90);
     this.car.x = StartingPosition.x;
     this.car.y = StartingPosition.y;
   }
@@ -324,35 +325,19 @@ class CompeativeNeuralNetwork {
 
     let output = this.nn.predict(input);
 
-    let max = 0;
-    let maxIndex = 0;
-    for (let i = 0; i < output.length; i++) {
-      if (output[i] > max) {
-        max = output[i];
-        maxIndex = i;
-      }
+    if (output[0] > 0.5) {
+      this.car.accelerate();
+    }
+    if (output[1] > 0.5) {
+      //this.car.decelerate();
+    }
+    if (output[2] > 0.5) {
+      this.car.turnLeft();
+    }
+    if (output[3] > 0.5) {
+      this.car.turnRight();
     }
 
-    if (maxIndex == 0) {
-      this.car.turnLeft();
-    }
-    if (maxIndex == 1) {
-      this.car.turnRight();
-    }
-    if (maxIndex == 2) {
-      this.car.accelerate();
-    }
-    if (maxIndex == 3) {
-      this.car.decelerate();
-    }
-    if (maxIndex == 4) {
-      this.car.accelerate();
-      this.car.turnLeft();
-    }
-    if (maxIndex == 5) {
-      this.car.accelerate();
-      this.car.turnRight();
-    }
 
   }
 

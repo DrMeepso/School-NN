@@ -90,6 +90,14 @@ if (SceneType == "Train") {
                 let RayEnd = new Vector2D(point.x + Math.cos(Angle) * 150, point.y + Math.sin(Angle) * 150);
                 let Ray = CollisionUtils.rayCast(TempWorld, RayStart, RayEnd);
 
+                // draw checkpoints
+                if (i == nn.checkPoint) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = "red";
+                    ctx.moveTo(RayStart.x, RayStart.y);
+                    ctx.lineTo(RayEnd.x, RayEnd.y);
+                    ctx.stroke();
+                }
 
                 if (i == nn.checkPoint) {
 
@@ -146,7 +154,7 @@ if (SceneType == "Train") {
         // create 100 copies of the best neural network
         // then mutate them
 
-        if (Counter < 120*15) return
+        if (Counter < 120*30) return
         Counter = 0;
 
         let BestNN = NeuralNetworks[0];
@@ -419,16 +427,17 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
     let Map = await fetch("defaultMap.json")
     Map = (await Map.json()).Points
 
-    let Offset = new Vector2D(580, 400);
+    let Offset = new Vector2D(2840+600, 810+400);
 
     StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
 
     for (let i = 0; i < 100; i++) {
         // 10 inputs for the 10 rays
-        let ThisNN = new NeuralNetwork([10, 100, 100, 6], activationFunctions.sigmoid);
+        let ThisNN = new NeuralNetwork([10, 100, 100, 4], activationFunctions.sigmoid);
         let CNN = new CompeativeNeuralNetwork(ThisNN)
         CNN.car.x = StartingPosition.x;
         CNN.car.y = StartingPosition.y;
+        CNN.car.angle = Map[0].angle + Math.PI / 2;
         NeuralNetworks.push(CNN);
     }
     
