@@ -13,6 +13,7 @@ const MouseButtons = new Vector3D(0, 0, 0);
 let NeuralNetworkGeneration = 1;
 let NeuralNetworks = [];
 let IsRunning = true;
+var IsTraining = false;
 let SceneType = "Train"; // LevelEditor, Train
 
 document.addEventListener("mousemove", (e) => {
@@ -62,8 +63,9 @@ if (SceneType == "Train") {
         GameWorld.draw(ctx);
 
         if (!IsRunning) return
+        Counter++;
 
-        if (NeuralNetworks.filter(nn => nn.disqualifyed == false).length == 0) {
+        if (NeuralNetworks.filter(nn => nn.disqualifyed == false).length == 0 && IsTraining) {
             Counter = 9999999999999999
         }
 
@@ -77,6 +79,13 @@ if (SceneType == "Train") {
             if (nn.disqualifyed) return
             CarObject.draw(ctx);
             CarObject.carUpdate(GameWorld);
+
+            if (CarObject.color == "green") {
+
+                WorldCamera.x = -CarObject.x + Canvas.width / 2;
+                WorldCamera.y = -CarObject.y + Canvas.height / 2;
+
+            }
 
             CheckPoints.forEach((point, i) => {
 
@@ -94,8 +103,8 @@ if (SceneType == "Train") {
                 if (i == nn.checkPoint) {
                     ctx.beginPath();
                     ctx.strokeStyle = "red";
-                    ctx.moveTo(RayStart.x, RayStart.y);
-                    ctx.lineTo(RayEnd.x, RayEnd.y);
+                    ctx.moveTo(RayStart.x + WorldCamera.x, RayStart.y + WorldCamera.y);
+                    ctx.lineTo(RayEnd.x + WorldCamera.x, RayEnd.y + WorldCamera.y);
                     ctx.stroke();
                 }
 
@@ -143,11 +152,8 @@ if (SceneType == "Train") {
 
         });
 
-        Counter++;
-
     }, 1);
 
-    let LastTrigger = Date.now();
     setInterval(function () {
 
         // wait 15 seconds before triggering the next generation
@@ -427,13 +433,20 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
     let Map = await fetch("defaultMap.json")
     Map = (await Map.json()).Points
 
+    let StartingNetwork = await fetch("Good.network")
+    StartingNetwork = await StartingNetwork.json()
+
     let Offset = new Vector2D(2840+600, 810+400);
 
     StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
 
+    console.log("Loading pre-trained network...")
+
     for (let i = 0; i < 100; i++) {
         // 10 inputs for the 10 rays
-        let ThisNN = new NeuralNetwork([10, 100, 100, 4], activationFunctions.sigmoid);
+        //let ThisNN = new NeuralNetwork([10, 100, 100, 4], activationFunctions.sigmoid);
+        let ThisNN = NeuralNetwork.fromJSON(StartingNetwork)
+        ThisNN.activationFunction = activationFunctions.sigmoid;
         let CNN = new CompeativeNeuralNetwork(ThisNN)
         CNN.car.x = StartingPosition.x;
         CNN.car.y = StartingPosition.y;
@@ -441,7 +454,8 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
         NeuralNetworks.push(CNN);
     }
     
-
+    IsTraining = true;
+    Counter = 9999999999999999
 
     Map.forEach(point => {
 

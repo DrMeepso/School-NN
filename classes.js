@@ -169,9 +169,6 @@ class BasicSprite {
       this.points[i].x = this.x + Math.cos(Angle + this.angle) * Distance;
       this.points[i].y = this.y + Math.sin(Angle + this.angle) * Distance;
 
-      this.points[i].x += WorldCamera.x;
-      this.points[i].y += WorldCamera.y;
-
     }
 
     for (let i = 0; i < this.lines.length; i++) {
@@ -185,9 +182,9 @@ class BasicSprite {
 
     context.fillStyle = this.color;
     context.beginPath();
-    context.moveTo(this.points[0].x, this.points[0].y);
+    context.moveTo(this.points[0].x + WorldCamera.x, this.points[0].y + WorldCamera.y);
     for (let i = 1; i < this.points.length; i++) {
-      context.lineTo(this.points[i].x, this.points[i].y);
+      context.lineTo(this.points[i].x + WorldCamera.x, this.points[i].y + WorldCamera.y);
     }
     context.closePath();
     context.fill();
