@@ -121,6 +121,8 @@ GameEvents.addEventListener("sceneChanged", (e) => {
 
     let Level1 = new Button(100, 160, 150, 50, "gray", "Level 1", async () => {
 
+        SettingsSubmenu = -1;
+
         let Map = await fetch("defaultMap2.json")
         Map = (await Map.json()).Points;
         LoadMapFromPoints(Map);
@@ -131,6 +133,8 @@ GameEvents.addEventListener("sceneChanged", (e) => {
 
     let Level2 = new Button(100, 220, 150, 50, "gray", "Level 2", async () => {
 
+        SettingsSubmenu = -1;
+
         let Map = await fetch("defaultMap.json")
         Map = (await Map.json()).Points;
         LoadMapFromPoints(Map);
@@ -138,6 +142,42 @@ GameEvents.addEventListener("sceneChanged", (e) => {
 
     }, "lightgray", "black")
     Buttons.push(Level2);
+
+    let customMap = new Button(260, 160, 150, 50, "gray", "Custom Map", async () => {
+
+        // file input
+        let input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".json";
+        input.click();
+        input.remove();
+
+        input.addEventListener("change", async (e) => {
+
+            let file = e.target.files[0];
+            let reader = new FileReader();
+
+            reader.addEventListener("load", async (e) => {
+
+                SettingsSubmenu = -1;
+
+                let Map = JSON.parse(e.target.result).Points;
+                LoadMapFromPoints(Map);
+                SetDrive()
+
+            })
+
+            reader.readAsText(file);
+
+        })
+
+    }, "lightgray", "black")
+    Buttons.push(customMap);
+
+    // --------------------------------------------
+
+    let Loading = new Button(100, 100, 150, 50, "gray", "Loading...", () => { }, "gray", "black")
+    Buttons.push(Loading);
 
     SceneRenderInterval = setInterval(() => {
 
@@ -161,9 +201,11 @@ GameEvents.addEventListener("sceneChanged", (e) => {
                 Back.enabled = true;
                 Level1.enabled = true;
                 Level2.enabled = true;
+                customMap.enabled = true;
                 break;
 
-            case 2:
+            case -1:
+                Loading.enabled = true;
                 break;
         }
 
@@ -282,7 +324,11 @@ GameEvents.addEventListener("sceneChanged", (e) => {
             CountDownButton.y = 150
 
             // set Lap counter to the correct lap
-            LapCounter.text = "Lap " + Lap + "/3";
+            if (!PlayerFinished){
+                LapCounter.text = "Lap " + Lap + "/3";
+            } else {
+                LapCounter.text = "Lap 3/3";
+            }
             // and make it in the bottom right corner
             LapCounter.x = Canvas.width - LapCounter.width - 10;
             LapCounter.y = Canvas.height - LapCounter.height - 10;
@@ -405,7 +451,7 @@ GameEvents.addEventListener("sceneChanged", (e) => {
                 FinishedTime.draw(ctx);
 
                 BackToMenu.x = Canvas.width / 2
-                BackToMenu.y = (Canvas.height / 2) + ((250/2)+14)
+                BackToMenu.y = (Canvas.height / 2) + ((250 / 2) + 14)
 
                 BackToMenu.update();
                 BackToMenu.draw(ctx);
