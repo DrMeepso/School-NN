@@ -232,6 +232,96 @@ class Car extends BasicSprite {
 
 }
 
+class Button extends BasicSprite {
+
+  id = "button"
+
+  constructor(x, y, width, height, color, text, callback, hoverColor, textColor) {
+    super(x, y, width, height, color);
+    this.text = text;
+    this.callback = callback;
+    this.normalColor = color;
+    this.hoverColor = hoverColor;
+    this.textColor = textColor;
+
+    this.hover = false;
+    this.click = false;
+    this.enabled = true;
+    this.screenSpace = true;
+
+  }
+
+  update() {
+    super.update();
+
+    if (this.hover) {
+      this.color = this.hoverColor;
+    } else {
+      this.color = this.normalColor;
+    }
+
+    // mouse position = MousePos
+
+    let mousePos = new Vector2D(MousePos.x, MousePos.y);
+
+    if (this.enabled == false) {
+      this.hover = false;
+      this.click = false;
+      return;
+    }
+    if (mousePos.x > this.points[0].x && mousePos.x < this.points[1].x && mousePos.y > this.points[0].y && mousePos.y < this.points[3].y) {
+
+      this.hover = true;
+
+      if (MouseButtons.x == 0) {
+        this.click = false;
+      }
+
+      if (MouseButtons.x == 1 && this.click == false) {
+        this.mouseDown();
+        this.click = true;
+        MouseButtons.x = 2;
+      }
+
+    } else {
+      this.hover = false;
+    }
+
+  }
+
+  draw(context) {
+
+    if (this.enabled == false) return
+
+    // draw rect and make sure its centerd vertically and horizontally
+    context.fillStyle = this.color;
+    context.beginPath();
+    context.moveTo(this.points[0].x, this.points[0].y);
+    for (let i = 1; i < this.points.length; i++) {
+      context.lineTo(this.points[i].x, this.points[i].y);
+    }
+    context.closePath();
+    context.fill();
+
+
+    // draw the text and make sure its centerd vertically and horizontally
+    context.fillStyle = this.textColor;
+    context.font = "20px Arial";
+    context.textAlign = "center";
+
+    let textWidth = context.measureText(this.text).width;
+    let textHeight = context.measureText("M").width;
+
+    context.fillText(this.text, this.x, this.y + textHeight / 2);
+
+  }
+
+  mouseDown() {
+    this.callback();
+  }
+}
+
+
 class CollisionDetection {
 
   constructor() { }
@@ -276,6 +366,7 @@ class CollisionDetection {
 }
 
 let StartingPosition = new Vector2D(500, 500);
+let StartingAngle = 0;
 
 class CompeativeNeuralNetwork {
 
@@ -307,12 +398,20 @@ class CompeativeNeuralNetwork {
 
     for (let i = 0; i < 10; i++) {
       let start = new Vector2D(this.car.x + Math.cos(this.car.angle) * 50, this.car.y + Math.sin(this.car.angle) * 50);
-      let AngleDiff = 180/10
+      let AngleDiff = 180 / 10
       let RayAngle = this.car.angle + DegToRad((AngleDiff * 5) - AngleDiff * i);
       let end = new Vector2D(this.car.x + Math.cos(RayAngle) * 500, this.car.y + Math.sin(RayAngle) * 500);
       let CarRay = CollisionUtils.rayCast(GameWorld, start, end);
 
       let DebugLine = new Line(start, end);
+      DebugLine.color = "green";
+      if (DebugVision){
+        if (CarRay.hit) {
+          DebugLine.end = CarRay.hitPoint;
+          DebugLine.color = "red";
+        }
+        DebugLine.draw(ctx);
+      }
 
       if (CarRay.hitPoint == null) {
         CarRay.hitPoint = new Vector2D(end.x, end.y);

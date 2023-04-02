@@ -5,7 +5,7 @@ let CarStartingX = 500 + Math.cos(0) * 350;
 let CarStartingY = 500 + Math.sin(0) * 350;
 
 const DownKeys = [];
-const CheckPoints = [];
+var CheckPoints = [];
 
 const MousePos = new Vector2D(0, 0);
 const MouseButtons = new Vector3D(0, 0, 0);
@@ -16,7 +16,30 @@ let IsRunning = true;
 var IsTraining = false;
 let SceneType = "Drive"; // LevelEditor, Train, Drive
 
+var DebugVision = false;
+
 const GameEvents = new EventTarget();
+
+var SceneRenderInterval;
+var SeconderyRenderInterval;
+
+var DocumentEventListeners = [];
+
+class DocumentEventListerner {
+    constructor(event, callback) {
+        this.event = event;
+        this.callback = callback;
+
+        this.tmpFunction = (e) => {
+            this.callback(e);
+        }
+
+        document.addEventListener(this.event, this.tmpFunction);
+    }
+    remove() {
+        document.removeEventListener(this.event, this.tmpFunction);
+    }
+}
 
 document.addEventListener("mousemove", (e) => {
 
@@ -53,23 +76,133 @@ document.addEventListener("mouseup", (e) => {
 
 })
 
-var Counter = 0;
-
 // on any event
 GameEvents.addEventListener("gameLoaded", () => {
     console.log("Game Loaded");
 })
 
-if (SceneType == "Drive") {
+GameEvents.addEventListener("sceneChanged", (e) => {
+
+    if (e.detail.scene != "Menu") return
+
+    if (SceneRenderInterval) clearInterval(SceneRenderInterval);
+    if (SeconderyRenderInterval) clearInterval(SeconderyRenderInterval);
+
+    // 0 main menu, 1 level select, 2 settings
+    var SettingsSubmenu = 0
+
+    let Buttons = [];
+
+    let PlayButton = new Button(100, 100, 150, 50, "gray", "Play!", () => {
+        SettingsSubmenu = 1;
+    }, "lightgray", "black")
+    Buttons.push(PlayButton);
+
+    let Editor = new Button(100, 160, 150, 50, "gray", "Level Editor", () => {
+
+        let GameLoadedEvent = new CustomEvent("preSceneChange", {
+            detail: {
+                scene: "LevelEditor",
+            },
+            bubbles: true,
+            cancelable: true
+        });
+        GameEvents.dispatchEvent(GameLoadedEvent);
+
+    }, "lightgray", "black")
+    Buttons.push(Editor);
+
+    // --------------------------------------------
+
+    let Back = new Button(100, 100, 150, 50, "gray", "Back", () => {
+        SettingsSubmenu = 0;
+    }, "lightgray", "black")
+    Buttons.push(Back);
+
+    let Level1 = new Button(100, 160, 150, 50, "gray", "Level 1", async () => {
+
+        let Map = await fetch("defaultMap2.json")
+        Map = (await Map.json()).Points;
+        LoadMapFromPoints(Map);
+        SetDrive()
+
+    }, "lightgray", "black")
+    Buttons.push(Level1);
+
+    let Level2 = new Button(100, 220, 150, 50, "gray", "Level 2", async () => {
+
+        let Map = await fetch("defaultMap.json")
+        Map = (await Map.json()).Points;
+        LoadMapFromPoints(Map);
+        SetDrive()
+
+    }, "lightgray", "black")
+    Buttons.push(Level2);
+
+    SceneRenderInterval = setInterval(() => {
+
+        ctx.clearRect(0, 0, Canvas.width, Canvas.height);
+
+        Buttons.forEach((button) => {
+            button.enabled = false;
+        })
+
+        switch (SettingsSubmenu) {
+
+            case 0:
+
+                PlayButton.enabled = true;
+                Editor.enabled = true;
+
+                break;
+
+            case 1:
+
+                Back.enabled = true;
+                Level1.enabled = true;
+                Level2.enabled = true;
+                break;
+
+            case 2:
+                break;
+        }
+
+        Buttons.forEach((button) => {
+            button.update()
+            button.draw(ctx);
+        })
 
 
-    GameEvents.addEventListener("gameLoaded", (e) => {
+    }, 1000 / 60);
 
-        console.log(e.detail)
+})
+
+GameEvents.addEventListener("sceneChanged", (e) => {
+
+    if (e.detail.scene != "Drive") return
+
+    if (SceneRenderInterval) clearInterval(SceneRenderInterval);
+    if (SeconderyRenderInterval) clearInterval(SeconderyRenderInterval);
+
+    GameEvents.addEventListener("modelLoaded", (e) => {
 
         var PlayerCheckpoint = 0;
         var PlayerCar = new Car(StartingPosition.x, StartingPosition.y, 100, 50, "green", 0.1);
         var CarObject = new Car(StartingPosition.x, StartingPosition.y, 100, 50, "blue", 0.1);
+
+        PlayerCar.angle = StartingAngle
+        CarObject.angle = StartingAngle
+
+        var MenuButton = new Button(70 / 2, 40 / 2, 70, 40, "gray", "Menu", () => {
+            let GameLoadedEvent = new CustomEvent("preSceneChange", {
+                detail: {
+                    scene: "Menu",
+                },
+                bubbles: true,
+                cancelable: true
+            });
+            GameEvents.dispatchEvent(GameLoadedEvent);
+        }, "lightgray", "black")
 
         PlayerCar.turnSpeed = 0.06
 
@@ -77,41 +210,127 @@ if (SceneType == "Drive") {
         let DrivingNN = new CompeativeNeuralNetwork(e.detail.loadedAI);
         DrivingNN.car = CarObject;
 
+        let RaceStarted = false
+
+        let Lap = 1
+        let PlayerFinished = false
+
+        let LapCounter = new Button(100, 100, 150, 50, "lightgray", "Lap 1/3", () => { }, "lightgray", "black")
+
+        let AILap = 1
+        let AIFinished = false
+
+        let CountDownButton = new Button(100, 100, 150, 50, "lightgray", "3", () => { }, "lightgray", "black")
+
+        let AIFinishTime = 0
+        let PlayerFinishTime = 0
+
+        let AITakeoverDrive = new CompeativeNeuralNetwork(e.detail.loadedAI);
+        AITakeoverDrive.car = PlayerCar;
+
+        let CountDown = 3;
         setInterval(() => {
+            CountDown--;
+            CountDownButton.text = CountDown;
+            if (CountDown == 0) {
+                RaceStarted = true;
+                CountDownButton.text = "Go!";
+            }
+        }, 1000)
+
+        let FinishedBackground = new Button(0, 0, 500, 250, "gray", "", () => { }, "gray", "gray")
+        let FinishedTime = new Button(0, 0, 500, 20, "gray", "", () => { }, "gray", "black")
+
+        let BackToMenu = new Button(0, 0, 500, 30, "gray", "Back to menu", () => {
+            let GameLoadedEvent = new CustomEvent("preSceneChange", {
+                detail: {
+                    scene: "Menu",
+                },
+                bubbles: true,
+                cancelable: true
+            });
+            GameEvents.dispatchEvent(GameLoadedEvent);
+        }, "lightgray", "black")
+
+        SceneRenderInterval = setInterval(() => {
 
             ctx.clearRect(0, 0, Canvas.width, Canvas.height);
+
             GameWorld.draw(ctx);
+
+            MenuButton.update();
+            MenuButton.draw(ctx);
 
             WorldCamera.x = -PlayerCar.x + Canvas.width / 2;
             WorldCamera.y = -PlayerCar.y + Canvas.height / 2;
 
-            if (DownKeys["w"]) {
-                PlayerCar.accelerate();
-            }
-            if (DownKeys["s"]) {
-                PlayerCar.decelerate();
-            }
-            if (DownKeys["a"]) {
-                PlayerCar.turnLeft();
-            }
-            if (DownKeys["d"]) {
-                PlayerCar.turnRight();
+            if (AILap > 3 && !AIFinished) {
+                AIFinished = true;
+                AIFinishTime = Date.now();
+                console.log("AI finished")
             }
 
-            PlayerCar.carUpdate(GameWorld);
+            if (Lap > 3 && !PlayerFinished) {
+                PlayerFinished = true;
+                PlayerFinishTime = Date.now();
+                console.log("Player finished")
+                console.log("AI finished in " + (AIFinishTime - Date.now()) / 1000 + " seconds")
+            }
+
+            // center countdown button
+            CountDownButton.x = Canvas.width / 2
+            CountDownButton.y = 150
+
+            // set Lap counter to the correct lap
+            LapCounter.text = "Lap " + Lap + "/3";
+            // and make it in the bottom right corner
+            LapCounter.x = Canvas.width - LapCounter.width - 10;
+            LapCounter.y = Canvas.height - LapCounter.height - 10;
+
+            if (RaceStarted) {
+
+                if (!PlayerFinished) {
+                    if (DownKeys["w"]) {
+                        PlayerCar.accelerate();
+                    }
+                    if (DownKeys["s"]) {
+                        PlayerCar.decelerate();
+                    }
+                    if (DownKeys["a"]) {
+                        PlayerCar.turnLeft();
+                    }
+                    if (DownKeys["d"]) {
+                        PlayerCar.turnRight();
+                    }
+                } else {
+                    AITakeoverDrive.act(ctx);
+                }
+
+                PlayerCar.carUpdate(GameWorld);
+
+                DrivingNN.act(ctx);
+                CarObject.carUpdate(GameWorld);
+
+            }
+
             PlayerCar.update();
             PlayerCar.draw(ctx);
 
-            DrivingNN.act(ctx);
-            CarObject.carUpdate(GameWorld);
             CarObject.update();
             CarObject.draw(ctx);
+
+            LapCounter.update();
+            LapCounter.draw(ctx);
+
+            if (CountDown > -1) {
+                CountDownButton.update();
+                CountDownButton.draw(ctx);
+            }
 
             CheckPoints.forEach((point, i) => {
 
                 let TempWorld = new World();
                 TempWorld.add(PlayerCar);
-                TempWorld.add(CarObject);
 
                 let Angle = point.z
 
@@ -123,7 +342,7 @@ if (SceneType == "Drive") {
                 // draw checkpoints
                 if (i == PlayerCheckpoint) {
                     ctx.beginPath();
-                    ctx.strokeStyle = "red";
+                    ctx.strokeStyle = "green";
                     ctx.moveTo(RayStart.x + WorldCamera.x, RayStart.y + WorldCamera.y);
                     ctx.lineTo(RayEnd.x + WorldCamera.x, RayEnd.y + WorldCamera.y);
                     ctx.stroke();
@@ -135,21 +354,63 @@ if (SceneType == "Drive") {
                         PlayerCheckpoint = i + 1;
                         if (PlayerCheckpoint == CheckPoints.length) {
                             PlayerCheckpoint = 0;
-                        }
-                    }
-                    if (Ray.hit && Ray.hitSprite == CarObject && i == DrivingNN.score) {
-                        DrivingNN.score = i + 1;
-                        if (DrivingNN.score == CheckPoints.length) {
-                            DrivingNN.score = 0;
+                            Lap++;
                         }
                     }
 
                 }
 
+                TempWorld = new World();
+                TempWorld.add(CarObject);
+
+                Ray = CollisionUtils.rayCast(TempWorld, RayStart, RayEnd);
+
+                if (i == DrivingNN.score) {
+
+                    ctx.beginPath();
+                    ctx.strokeStyle = "blue";
+                    ctx.moveTo(RayStart.x + WorldCamera.x, RayStart.y + WorldCamera.y);
+                    ctx.lineTo(RayEnd.x + WorldCamera.x, RayEnd.y + WorldCamera.y);
+                    ctx.stroke();
+
+                    if (Ray.hit && Ray.hitSprite == CarObject) {
+                        DrivingNN.score = i + 1;
+                        if (DrivingNN.score == CheckPoints.length) {
+                            DrivingNN.score = 0;
+                            AILap++;
+                        }
+                    }
+
+                }
+
+
             });
 
             let TempWorld = new World();
             TempWorld.add(PlayerCar);
+
+            if (PlayerFinished) {
+
+                FinishedBackground.x = Canvas.width / 2
+                FinishedBackground.y = Canvas.height / 2
+
+                FinishedBackground.update();
+                FinishedBackground.draw(ctx);
+
+                FinishedTime.text = "You finished " + -((AIFinishTime - PlayerFinishTime) / 1000) + " seconds after the AI"
+                FinishedTime.x = Canvas.width / 2
+                FinishedTime.y = (Canvas.height / 2)
+
+                FinishedTime.update();
+                FinishedTime.draw(ctx);
+
+                BackToMenu.x = Canvas.width / 2
+                BackToMenu.y = (Canvas.height / 2) + ((250/2)+14)
+
+                BackToMenu.update();
+                BackToMenu.draw(ctx);
+
+            }
 
             PlayerCar.lines.forEach(plrLine => {
 
@@ -162,8 +423,6 @@ if (SceneType == "Drive") {
                     PlayerCar.x = Intersection.x + Math.cos(CarAngle) * 85;
                     PlayerCar.y = Intersection.y + Math.sin(CarAngle) * 85;
 
-
-                    //PlayerCar.angle = LineAngle;
                 }
 
                 TrackInObject.lines.forEach(trackLine => {
@@ -179,7 +438,7 @@ if (SceneType == "Drive") {
                 TrackOutObject.lines.forEach(trackLine => {
 
                     if (TempWorld.lineintersect(plrLine, trackLine).hit) {
-                            
+
                         OnHitWall(trackLine);
 
                     }
@@ -191,19 +450,31 @@ if (SceneType == "Drive") {
 
         }, 1000 / 60);
 
-    })
-}
+    }, { once: true })
+})
 
-if (SceneType == "Train") {
+GameEvents.addEventListener("sceneChanged", (e) => {
+
+    if (e.detail.scene != "Train") return
+
+    if (SceneRenderInterval) {
+        clearInterval(SceneRenderInterval);
+    }
+    if (SeconderyRenderInterval) {
+        clearInterval(SeconderyRenderInterval);
+    }
+
+    var Counter = 0;
 
     // Traning Loop
-    setInterval(function () {
+    SceneRenderInterval = setInterval(function () {
+
+        console.log("Training")
 
         ctx.clearRect(0, 0, Canvas.width, Canvas.height);
 
         GameWorld.draw(ctx);
 
-        if (!IsRunning) return
         Counter++;
 
         if (NeuralNetworks.filter(nn => nn.disqualifyed == false).length == 0 && IsTraining) {
@@ -220,12 +491,14 @@ if (SceneType == "Train") {
             CarObject.draw(ctx);
             CarObject.carUpdate(GameWorld);
 
-            if (CarObject.color == "green") {
+            // sort the cars by score
+            let Sorted = NeuralNetworks.sort((a, b) => {
+                return b.score - a.score;
+            })
 
-                WorldCamera.x = -CarObject.x + Canvas.width / 2;
-                WorldCamera.y = -CarObject.y + Canvas.height / 2;
-
-            }
+            let MainCar = Sorted[0]
+            WorldCamera.x = -MainCar.car.x + Canvas.width / 2;
+            WorldCamera.y = -MainCar.car.y + Canvas.height / 2;
 
             CheckPoints.forEach((point, i) => {
 
@@ -294,7 +567,7 @@ if (SceneType == "Train") {
 
     }, 1);
 
-    setInterval(function () {
+    SeconderyRenderInterval = setInterval(function () {
 
         // wait 15 seconds before triggering the next generation
         // create 100 copies of the best neural network
@@ -347,13 +620,18 @@ if (SceneType == "Train") {
 
     }, 1)
 
-}
+});
 
-var Points = [
-    new LevelEditorPoint(500, 500, 0),
-];
+GameEvents.addEventListener("sceneChanged", (e) => {
 
-if (SceneType == "LevelEditor") {
+    if (e.detail.scene != "LevelEditor") return
+
+    if (SceneRenderInterval) clearInterval(SceneRenderInterval);
+    if (SeconderyRenderInterval) clearInterval(SeconderyRenderInterval);
+
+    var Points = [
+        new LevelEditorPoint(500, 500, 0),
+    ];
 
     let SelectedPoint = null;
     let LastSelectedPoint = Points[0];
@@ -362,7 +640,75 @@ if (SceneType == "LevelEditor") {
 
     let PointVisualiser = new BasicSprite(0, 0, 10, 10, "green")
 
-    setInterval(function () {
+    var MenuButton = new Button(70 / 2, 40 / 2, 70, 40, "gray", "Menu", () => {
+
+        var Thisprompt = prompt(`Are you sure you want to leave?\nAll unsaved progress will be lost.\nType "Yes" to exit`)
+
+        if (Thisprompt.toLocaleLowerCase() == "yes") {
+            let GameLoadedEvent = new CustomEvent("preSceneChange", {
+                detail: {
+                    scene: "Menu",
+                },
+                bubbles: true,
+                cancelable: true
+            });
+            GameEvents.dispatchEvent(GameLoadedEvent);
+        }
+
+    }, "lightgray", "black")
+
+    var SaveButton = new Button(70 / 2, 40 / 2 + 50, 70, 40, "gray", "Save", () => {
+
+        // use the MapToJSON function to convert the map to a JSON string
+        var MapJSON = MapToJSON(Points);
+
+        // download the JSON string as a file
+        var element = document.createElement('a');
+        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(MapJSON));
+        element.setAttribute('download', "Map.json");
+
+        element.style.display = 'none';
+        document.body.appendChild(element);
+
+        element.click();
+
+        document.body.removeChild(element);
+
+    }, "lightgray", "black")
+
+    var LoadButton = new Button(70 / 2, 40 / 2 + 100, 70, 40, "gray", "Load", () => {
+
+        var Thisprompt = prompt(`Are you sure you want to load a map?\nAll unsaved progress will be lost.\nType "Yes" to load`)
+
+        if (Thisprompt.toLocaleLowerCase() == "yes") {
+            var element = document.createElement('input');
+            element.setAttribute('type', 'file');
+            element.setAttribute('accept', '.json');
+
+            element.style.display = 'none';
+            document.body.appendChild(element);
+
+            element.click();
+
+            document.body.removeChild(element);
+
+            element.addEventListener("change", (e) => {
+                var file = e.target.files[0];
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    var text = e.target.result;
+                    Points = JSONToMap(JSON.parse(text));
+                };
+                reader.readAsText(file);
+            });
+
+        }
+
+    }, "lightgray", "black")
+
+
+    let Outline = new BasicSprite(0, 0, 15, 15, "white")
+    SceneRenderInterval = setInterval(function () {
 
         ctx.clearRect(0, 0, Canvas.width, Canvas.height);
 
@@ -374,10 +720,19 @@ if (SceneType == "LevelEditor") {
                 PointVisualiser.color = "green"
             }
 
+            if (point == LastSelectedPoint) {
+                Outline.x = point.x
+                Outline.y = point.y
+
+                Outline.update()
+                Outline.draw(ctx)
+            }
+
             PointVisualiser.x = point.x;
             PointVisualiser.y = point.y;
             PointVisualiser.update()
             PointVisualiser.draw(ctx);
+
 
             RoadHalfWidth = point.width / 2;
 
@@ -427,6 +782,15 @@ if (SceneType == "LevelEditor") {
 
         }
 
+        MenuButton.update();
+        MenuButton.draw(ctx);
+
+        SaveButton.update();
+        SaveButton.draw(ctx);
+
+        LoadButton.update();
+        LoadButton.draw(ctx);
+
         if (SelectedPoint) {
 
             if (SelectedPointType == false) {
@@ -445,7 +809,8 @@ if (SceneType == "LevelEditor") {
 
     })
 
-    document.addEventListener("mousedown", function (event) {
+    let temp, temp1, temp2;
+    temp = new DocumentEventListerner("mousedown", function (event) {
 
         let MouseHoverPoints = Points.filter(point => {
             return (MousePos.x > (point.x + WorldCamera.x) - 5 && MousePos.x < (point.x + WorldCamera.x) + 5 && MousePos.y > (point.y + WorldCamera.y) - 5 && MousePos.y < (point.y + WorldCamera.y) + 5)
@@ -453,6 +818,7 @@ if (SceneType == "LevelEditor") {
 
         if (MouseHoverPoints.length > 0) {
             SelectedPoint = MouseHoverPoints[0];
+            LastSelectedPoint = SelectedPoint
             SelectedPointType = false;
             SelectedPointSide = false;
         }
@@ -463,6 +829,7 @@ if (SceneType == "LevelEditor") {
 
         if (MouseHoverInnerPoints.length > 0) {
             SelectedPoint = MouseHoverInnerPoints[0];
+            LastSelectedPoint = SelectedPoint
             SelectedPointType = true;
             SelectedPointSide = false;
         }
@@ -473,33 +840,89 @@ if (SceneType == "LevelEditor") {
 
         if (MouseHoverOuterPoints.length > 0) {
             SelectedPoint = MouseHoverOuterPoints[0];
+            LastSelectedPoint = SelectedPoint
             SelectedPointType = true;
             SelectedPointSide = true;
         }
 
     })
+    DocumentEventListeners.push(temp);
 
-    document.addEventListener("mouseup", function (event) {
-        LastSelectedPoint = SelectedPoint;
+    temp1 = new DocumentEventListerner("mouseup", function (event) {
+        if (SelectedPoint != null) {
+            LastSelectedPoint = SelectedPoint;
+        }
         SelectedPoint = null;
     })
+    DocumentEventListeners.push(temp1);
 
-    document.addEventListener("keydown", function (event) {
+    temp2 = new DocumentEventListerner("keydown", function (event) {
         if (event.key == "+" || event.key == "=") {
             let NewPoint = new LevelEditorPoint(MousePos.x - WorldCamera.x, MousePos.y - WorldCamera.y, 0);
             // set point to be infront of the last selected point in the array
             Points.splice(Points.indexOf(LastSelectedPoint) + 1, 0, NewPoint);
+            LastSelectedPoint = NewPoint
 
         }
 
         if (event.key == "Backspace") {
+            if (LastSelectedPoint == null) return
             Points.splice(Points.indexOf(LastSelectedPoint), 1);
         }
+
+        // arrow keys move the camera
+        if (event.key == "ArrowUp") {
+            WorldCamera.y += 10;
+        }
+        if (event.key == "ArrowDown") {
+            WorldCamera.y -= 10;
+        }
+        if (event.key == "ArrowLeft") {
+            WorldCamera.x += 10;
+        }
+        if (event.key == "ArrowRight") {
+            WorldCamera.x -= 10;
+        }
+
     });
+    DocumentEventListeners.push(temp2);
 
-}
+})
 
-function MapToJSON() {
+GameEvents.addEventListener("preSceneChange", function (event) {
+
+    WorldCamera.x = 0;
+    WorldCamera.y = 0;
+
+    // remove all document event listeners
+    DocumentEventListeners.forEach(listener => {
+        listener.remove();
+        console.log("Removed " + listener.type + " event listener")
+        DocumentEventListeners.splice(DocumentEventListeners.indexOf(listener), 1);
+    })
+
+    clearInterval(SceneRenderInterval);
+    clearInterval(SeconderyRenderInterval);
+
+    console.log("Scene changed to " + event.detail.scene)
+
+    let SceneChangeEvent = new CustomEvent("sceneChanged", {
+        detail: {
+            scene: event.detail.scene
+        }
+    })
+
+    GameWorld.sprites = [];
+    let TrackOutCopy = Object.assign({}, TrackOutObject);
+    let TrackInCopy = Object.assign({}, TrackInObject);
+    GameWorld.add(TrackOutCopy);
+    GameWorld.add(TrackInCopy);
+
+    GameEvents.dispatchEvent(SceneChangeEvent);
+
+})
+
+function MapToJSON(Points) {
     let JSONMap = {
         "Points": Points.map(point => {
             return {
@@ -518,15 +941,14 @@ function MapToJSON() {
         })
     }
 
-    console.log(JSON.stringify(JSONMap));
+    return JSON.stringify(JSONMap)
 }
 
 function JSONToMap(JSONMap) {
-    Points = JSONMap.Points.map(point => {
+    return JSONMap.Points.map(point => {
         let NewPoint = new LevelEditorPoint(point.x, point.y, 0);
         NewPoint.angle = point.angle
         return NewPoint
-
     })
 }
 
@@ -551,6 +973,8 @@ let CheckPointAmmount = 24;
 let TrackOutObject = new BasicSprite(0, 0, 0, 0, "black");
 let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
 
+let Offset = new Vector2D(2840 + 600, 810 + 400);
+
 (async () => {
 
     let Map = await fetch("defaultMap.json")
@@ -559,34 +983,18 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
     let StartingNetwork = await fetch("Good.network")
     StartingNetwork = await StartingNetwork.json()
 
-    let Offset = new Vector2D(2840 + 600, 810 + 400);
-
     StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
 
     console.log("Loading pre-trained network...")
 
+
     let DefaultNetwork = NeuralNetwork.fromJSON(StartingNetwork)
-    DefaultNetwork.activationFunction = activationFunctions.sigmoid;
-
-    // create a brodcast event called game loaded
-    let GameLoadedEvent = new CustomEvent("gameLoaded", {
-        detail: {
-            message: "Game Loaded",
-            time: new Date(),
-            loadedAI: DefaultNetwork
-        },
-        bubbles: true,
-        cancelable: true
-    });
-
-    // dispatch the event
-    GameEvents.dispatchEvent(GameLoadedEvent);
+    DefaultNetwork.activationFunction = activationFunctions.sigmoid
 
     for (let i = 0; i < 100; i++) {
         // 10 inputs for the 10 rays
         //let ThisNN = new NeuralNetwork([10, 100, 100, 4], activationFunctions.sigmoid);
-        let ThisNN = NeuralNetwork.fromJSON(StartingNetwork)
-        ThisNN.activationFunction = activationFunctions.sigmoid;
+        let ThisNN = DefaultNetwork.copy()
         let CNN = new CompeativeNeuralNetwork(ThisNN)
         CNN.car.x = StartingPosition.x;
         CNN.car.y = StartingPosition.y;
@@ -594,8 +1002,36 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
         NeuralNetworks.push(CNN);
     }
 
+    let GameLoadedEvent = new CustomEvent("preSceneChange", {
+        detail: {
+            scene: "Menu",
+        },
+        bubbles: true,
+        cancelable: true
+    });
+    GameEvents.dispatchEvent(GameLoadedEvent);
+
     IsTraining = true;
     Counter = 9999999999999999
+
+    LoadMapFromPoints(Map)
+
+})()
+
+function LoadMapFromPoints(Map) {
+
+    StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
+    StartingAngle = Map[0].angle - Math.PI / 2;
+
+    RaceTrackOuterPoints = []
+    RaceTrackInnerPoints = []
+
+    RaceTrackOuterLines = [];
+    RaceTrackInnerLines = [];
+
+    CheckPoints = [];
+
+    StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
 
     Map.forEach(point => {
 
@@ -615,9 +1051,7 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
     TrackOutObject.lines = RaceTrackOuterLines;
     TrackInObject.lines = RaceTrackInnerLines;
 
-    TrackInObject.update = function (world) {
-
-    }
+    TrackInObject.update = function (world) { }
     TrackOutObject.update = function (world) { }
 
     RaceTrackInnerLines.forEach(line => {
@@ -638,11 +1072,35 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
             this.lines[i].draw(ctx);
         }
     }
+}
 
-    GameWorld.add(TrackOutObject);
-    GameWorld.add(TrackInObject);
+async function SetDrive() {
 
-})()
+    let GameSceneEvent = new CustomEvent("preSceneChange", {
+        detail: {
+            scene: "Drive",
+        },
+        bubbles: true,
+        cancelable: true
+    });
+    GameEvents.dispatchEvent(GameSceneEvent);
+
+    let StartingNetwork = await fetch("Good.network")
+    StartingNetwork = await StartingNetwork.json()
+
+    let DefaultNetwork = NeuralNetwork.fromJSON(StartingNetwork)
+    DefaultNetwork.activationFunction = activationFunctions.sigmoid;
+
+    let GameModelEvent = new CustomEvent("modelLoaded", {
+        detail: {
+            loadedAI: DefaultNetwork
+        },
+        bubbles: true,
+        cancelable: true
+    });
+    GameEvents.dispatchEvent(GameModelEvent);
+
+}
 
 function radToDeg(rad) {
     return rad * (180 / Math.PI);
