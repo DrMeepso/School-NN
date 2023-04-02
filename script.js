@@ -14,7 +14,9 @@ let NeuralNetworkGeneration = 1;
 let NeuralNetworks = [];
 let IsRunning = true;
 var IsTraining = false;
-let SceneType = "Train"; // LevelEditor, Train
+let SceneType = "Drive"; // LevelEditor, Train, Drive
+
+const GameEvents = new EventTarget();
 
 document.addEventListener("mousemove", (e) => {
 
@@ -53,6 +55,145 @@ document.addEventListener("mouseup", (e) => {
 
 var Counter = 0;
 
+// on any event
+GameEvents.addEventListener("gameLoaded", () => {
+    console.log("Game Loaded");
+})
+
+if (SceneType == "Drive") {
+
+
+    GameEvents.addEventListener("gameLoaded", (e) => {
+
+        console.log(e.detail)
+
+        var PlayerCheckpoint = 0;
+        var PlayerCar = new Car(StartingPosition.x, StartingPosition.y, 100, 50, "green", 0.1);
+        var CarObject = new Car(StartingPosition.x, StartingPosition.y, 100, 50, "blue", 0.1);
+
+        PlayerCar.turnSpeed = 0.06
+
+        // create a nn to race against
+        let DrivingNN = new CompeativeNeuralNetwork(e.detail.loadedAI);
+        DrivingNN.car = CarObject;
+
+        setInterval(() => {
+
+            ctx.clearRect(0, 0, Canvas.width, Canvas.height);
+            GameWorld.draw(ctx);
+
+            WorldCamera.x = -PlayerCar.x + Canvas.width / 2;
+            WorldCamera.y = -PlayerCar.y + Canvas.height / 2;
+
+            if (DownKeys["w"]) {
+                PlayerCar.accelerate();
+            }
+            if (DownKeys["s"]) {
+                PlayerCar.decelerate();
+            }
+            if (DownKeys["a"]) {
+                PlayerCar.turnLeft();
+            }
+            if (DownKeys["d"]) {
+                PlayerCar.turnRight();
+            }
+
+            PlayerCar.carUpdate(GameWorld);
+            PlayerCar.update();
+            PlayerCar.draw(ctx);
+
+            DrivingNN.act(ctx);
+            CarObject.carUpdate(GameWorld);
+            CarObject.update();
+            CarObject.draw(ctx);
+
+            CheckPoints.forEach((point, i) => {
+
+                let TempWorld = new World();
+                TempWorld.add(PlayerCar);
+                TempWorld.add(CarObject);
+
+                let Angle = point.z
+
+                // make a raycast from each checkpoint
+                let RayStart = new Vector2D(point.x - Math.cos(Angle) * 150, point.y - Math.sin(Angle) * 150);
+                let RayEnd = new Vector2D(point.x + Math.cos(Angle) * 150, point.y + Math.sin(Angle) * 150);
+                let Ray = CollisionUtils.rayCast(TempWorld, RayStart, RayEnd);
+
+                // draw checkpoints
+                if (i == PlayerCheckpoint) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = "red";
+                    ctx.moveTo(RayStart.x + WorldCamera.x, RayStart.y + WorldCamera.y);
+                    ctx.lineTo(RayEnd.x + WorldCamera.x, RayEnd.y + WorldCamera.y);
+                    ctx.stroke();
+                }
+
+                if (i == PlayerCheckpoint || i == DrivingNN.score) {
+
+                    if (Ray.hit && Ray.hitSprite == PlayerCar && i == PlayerCheckpoint) {
+                        PlayerCheckpoint = i + 1;
+                        if (PlayerCheckpoint == CheckPoints.length) {
+                            PlayerCheckpoint = 0;
+                        }
+                    }
+                    if (Ray.hit && Ray.hitSprite == CarObject && i == DrivingNN.score) {
+                        DrivingNN.score = i + 1;
+                        if (DrivingNN.score == CheckPoints.length) {
+                            DrivingNN.score = 0;
+                        }
+                    }
+
+                }
+
+            });
+
+            let TempWorld = new World();
+            TempWorld.add(PlayerCar);
+
+            PlayerCar.lines.forEach(plrLine => {
+
+                function OnHitWall(trackLine) {
+                    let Intersection = TempWorld.lineintersect(plrLine, trackLine).hitPoint;
+
+                    let CarAngle = Math.atan2(PlayerCar.y - Intersection.y, PlayerCar.x - Intersection.x);
+                    let Distance = Math.sqrt(Math.pow(PlayerCar.x - Intersection.x, 2) + Math.pow(PlayerCar.y - Intersection.y, 2));
+
+                    PlayerCar.x = Intersection.x + Math.cos(CarAngle) * 85;
+                    PlayerCar.y = Intersection.y + Math.sin(CarAngle) * 85;
+
+
+                    //PlayerCar.angle = LineAngle;
+                }
+
+                TrackInObject.lines.forEach(trackLine => {
+
+                    if (TempWorld.lineintersect(plrLine, trackLine).hit) {
+
+                        OnHitWall(trackLine);
+
+                    }
+
+                })
+
+                TrackOutObject.lines.forEach(trackLine => {
+
+                    if (TempWorld.lineintersect(plrLine, trackLine).hit) {
+                            
+                        OnHitWall(trackLine);
+
+                    }
+
+                })
+
+            })
+
+
+        }, 1000 / 60);
+
+    })
+}
+
 if (SceneType == "Train") {
 
     // Traning Loop
@@ -73,10 +214,9 @@ if (SceneType == "Train") {
 
             let CarObject = nn.car;
 
-            nn.act(ctx)
-
-            CarObject.update();
             if (nn.disqualifyed) return
+            nn.act(ctx)
+            CarObject.update();
             CarObject.draw(ctx);
             CarObject.carUpdate(GameWorld);
 
@@ -142,7 +282,7 @@ if (SceneType == "Train") {
 
                 CarObject.lines.forEach(carLine => {
                     let LineCheck = TempWorld.lineintersect(carLine, line);
-                    if (LineCheck.hit  && !nn.disqualifyed) {
+                    if (LineCheck.hit && !nn.disqualifyed) {
                         nn.disqualifyed = true;
                     }
                 });
@@ -160,7 +300,7 @@ if (SceneType == "Train") {
         // create 100 copies of the best neural network
         // then mutate them
 
-        if (Counter < 120*30) return
+        if (Counter < 120 * 30) return
         Counter = 0;
 
         let BestNN = NeuralNetworks[0];
@@ -359,23 +499,6 @@ if (SceneType == "LevelEditor") {
 
 }
 
-document.addEventListener("keydown", function (event) {
-
-    if (event.key == "ArrowUp") {
-        WorldCamera.y += 10;
-    }
-    if (event.key == "ArrowDown") {
-        WorldCamera.y -= 10;
-    }
-    if (event.key == "ArrowLeft") {
-        WorldCamera.x += 10;
-    }
-    if (event.key == "ArrowRight") {
-        WorldCamera.x -= 10;
-    }
-
-})
-
 function MapToJSON() {
     let JSONMap = {
         "Points": Points.map(point => {
@@ -436,11 +559,28 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
     let StartingNetwork = await fetch("Good.network")
     StartingNetwork = await StartingNetwork.json()
 
-    let Offset = new Vector2D(2840+600, 810+400);
+    let Offset = new Vector2D(2840 + 600, 810 + 400);
 
     StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
 
     console.log("Loading pre-trained network...")
+
+    let DefaultNetwork = NeuralNetwork.fromJSON(StartingNetwork)
+    DefaultNetwork.activationFunction = activationFunctions.sigmoid;
+
+    // create a brodcast event called game loaded
+    let GameLoadedEvent = new CustomEvent("gameLoaded", {
+        detail: {
+            message: "Game Loaded",
+            time: new Date(),
+            loadedAI: DefaultNetwork
+        },
+        bubbles: true,
+        cancelable: true
+    });
+
+    // dispatch the event
+    GameEvents.dispatchEvent(GameLoadedEvent);
 
     for (let i = 0; i < 100; i++) {
         // 10 inputs for the 10 rays
@@ -453,7 +593,7 @@ let TrackInObject = new BasicSprite(0, 0, 0, 0, "black");
         CNN.car.angle = Map[0].angle + Math.PI / 2;
         NeuralNetworks.push(CNN);
     }
-    
+
     IsTraining = true;
     Counter = 9999999999999999
 

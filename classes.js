@@ -201,6 +201,7 @@ class Car extends BasicSprite {
     this.speed = speed;
     this.angle = 0;
     this.velocity = 0
+    this.turnSpeed = 0.1;
   }
 
   carUpdate(world) {
@@ -222,11 +223,11 @@ class Car extends BasicSprite {
   }
 
   turnLeft() {
-    this.angle -= 0.1;
+    this.angle -= this.turnSpeed;
   }
 
   turnRight() {
-    this.angle += 0.1;
+    this.angle += this.turnSpeed;
   }
 
 }
@@ -334,7 +335,6 @@ class CompeativeNeuralNetwork {
     if (output[3] > 0.5) {
       this.car.turnRight();
     }
-
 
   }
 

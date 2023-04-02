@@ -217,72 +217,7 @@ class NeuralNetwork {
         return nn;
 
     }
-
-    Backpropagation(input, target, learningRate) {
-
-        let output = this.feedForward(input);
-
-        for (let i = 0; i < this.Layers.length; i++) {
-
-            let ThisLayer = this.Layers[i];
-
-            for (let j = 0; j < ThisLayer.Neurons.length; j++) {
-
-                let ThisNeuron = ThisLayer.Neurons[j];
-
-                for (let k = 0; k < ThisNeuron.Connections.length; k++) {
-
-                    let ThisConnection = ThisNeuron.Connections[k];
-
-                    if (i == this.Layers.length - 1) {
-                        ThisConnection.Weight += learningRate * ThisConnection.ImputNeuron.Output * (target[j] - output[j]);
-                    } else {
-                        ThisConnection.Weight += learningRate * ThisConnection.ImputNeuron.Output * ThisConnection.OutputNeuron.Delta;
-                    }
-
-                }
-
-                if (i == this.Layers.length - 1) {
-                    ThisNeuron.Bias += learningRate * (target[j] - output[j]);
-                } else {
-                    ThisNeuron.Bias += learningRate * ThisNeuron.Delta;
-                }
-
-            }
-
-        }
-
-    }
-
-    feedForward(input) {
-
-        for (let i = 0; i < this.Layers.length; i++) {
-
-            let ThisLayer = this.Layers[i];
-
-            for (let j = 0; j < ThisLayer.Neurons.length; j++) {
-
-                let ThisNeuron = ThisLayer.Neurons[j];
-
-                if (i == 0) {
-                    ThisNeuron.Output = input[j];
-                } else {
-                    let Sum = 0;
-                    for (let k = 0; k < ThisNeuron.Connections.length; k++) {
-                        let ThisConnection = ThisNeuron.Connections[k];
-                        Sum += ThisConnection.ImputNeuron.Output * ThisConnection.Weight;
-                    }
-                    ThisNeuron.Output = this.activationFunction(Sum + ThisNeuron.Bias);
-                }
-
-            }
-
-        }
-
-        return this.Layers[this.Layers.length - 1].Neurons.map(n => n.Output);
-
-    }
-
+    
 }
 
 class Layer {
@@ -332,7 +267,6 @@ class Connection {
         this.Weight = Math.random() * 50 - 25;
 
     }
-
 
 }
 
