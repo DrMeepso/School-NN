@@ -76,11 +76,6 @@ document.addEventListener("mouseup", (e) => {
 
 })
 
-// on any event
-GameEvents.addEventListener("gameLoaded", () => {
-    console.log("Game Loaded");
-})
-
 GameEvents.addEventListener("sceneChanged", (e) => {
 
     if (e.detail.scene != "Menu") return
@@ -309,14 +304,11 @@ GameEvents.addEventListener("sceneChanged", (e) => {
             if (AILap > 3 && !AIFinished) {
                 AIFinished = true;
                 AIFinishTime = Date.now();
-                console.log("AI finished")
             }
 
             if (Lap > 3 && !PlayerFinished) {
                 PlayerFinished = true;
                 PlayerFinishTime = Date.now();
-                console.log("Player finished")
-                console.log("AI finished in " + (AIFinishTime - Date.now()) / 1000 + " seconds")
             }
 
             // center countdown button
@@ -514,8 +506,6 @@ GameEvents.addEventListener("sceneChanged", (e) => {
 
     // Traning Loop
     SceneRenderInterval = setInterval(function () {
-
-        console.log("Training")
 
         ctx.clearRect(0, 0, Canvas.width, Canvas.height);
 
@@ -943,7 +933,6 @@ GameEvents.addEventListener("preSceneChange", function (event) {
     // remove all document event listeners
     DocumentEventListeners.forEach(listener => {
         listener.remove();
-        console.log("Removed " + listener.type + " event listener")
         DocumentEventListeners.splice(DocumentEventListeners.indexOf(listener), 1);
     })
 
@@ -1023,6 +1012,8 @@ let Offset = new Vector2D(2840 + 600, 810 + 400);
 
 (async () => {
 
+    console.log("Zach's CUM Engine v0.0.1")
+
     let Map = await fetch("defaultMap.json")
     Map = (await Map.json()).Points
 
@@ -1032,7 +1023,6 @@ let Offset = new Vector2D(2840 + 600, 810 + 400);
     StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
 
     console.log("Loading pre-trained network...")
-
 
     let DefaultNetwork = NeuralNetwork.fromJSON(StartingNetwork)
     DefaultNetwork.activationFunction = activationFunctions.sigmoid
