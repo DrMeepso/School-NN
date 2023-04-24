@@ -316,7 +316,7 @@ GameEvents.addEventListener("sceneChanged", (e) => {
             CountDownButton.y = 150
 
             // set Lap counter to the correct lap
-            if (!PlayerFinished){
+            if (!PlayerFinished) {
                 LapCounter.text = "Lap " + Lap + "/3";
             } else {
                 LapCounter.text = "Lap 3/3";
@@ -348,6 +348,7 @@ GameEvents.addEventListener("sceneChanged", (e) => {
 
                 DrivingNN.act(ctx);
                 CarObject.carUpdate(GameWorld);
+                RenderNN(DrivingNN);
 
             }
 
@@ -1017,19 +1018,18 @@ let Offset = new Vector2D(2840 + 600, 810 + 400);
     let Map = await fetch("defaultMap.json")
     Map = (await Map.json()).Points
 
-    let StartingNetwork = await fetch("Good.network")
+    let StartingNetwork = await fetch("Small.network")
     StartingNetwork = await StartingNetwork.json()
 
     StartingPosition = new Vector2D(Map[0].x + Offset.x, Map[0].y + Offset.y);
 
     console.log("Loading pre-trained network...")
 
-    let DefaultNetwork = NeuralNetwork.fromJSON(StartingNetwork)
+    //let DefaultNetwork = NeuralNetwork.fromJSON(StartingNetwork)
+    let DefaultNetwork = new NeuralNetwork([10, 12, 8, 4], activationFunctions.sigmoid);
     DefaultNetwork.activationFunction = activationFunctions.sigmoid
 
     for (let i = 0; i < 100; i++) {
-        // 10 inputs for the 10 rays
-        //let ThisNN = new NeuralNetwork([10, 100, 100, 4], activationFunctions.sigmoid);
         let ThisNN = DefaultNetwork.copy()
         let CNN = new CompeativeNeuralNetwork(ThisNN)
         CNN.car.x = StartingPosition.x;
@@ -1121,7 +1121,7 @@ async function SetDrive() {
     });
     GameEvents.dispatchEvent(GameSceneEvent);
 
-    let StartingNetwork = await fetch("Good.network")
+    let StartingNetwork = await fetch("Smaller.network")
     StartingNetwork = await StartingNetwork.json()
 
     let DefaultNetwork = NeuralNetwork.fromJSON(StartingNetwork)
@@ -1144,4 +1144,152 @@ function radToDeg(rad) {
 
 function degToRad(deg) {
     return deg * (Math.PI / 180);
+}
+
+function StartTraining() {
+    let GameSceneEvent = new CustomEvent("preSceneChange", {
+        detail: {
+            scene: "Train",
+        },
+        bubbles: true,
+        cancelable: true
+    });
+
+    GameEvents.dispatchEvent(GameSceneEvent);
+}
+
+const win = {}
+
+function RenderNN(nn) {
+
+    // take a nn as input and render a visual representation of it on the screen
+
+    if (win.window == undefined) {
+        PopoutNN()
+    }
+
+    let canvas = win.window.document.getElementById("nnCanvas");
+    let ctx = canvas.getContext("2d");
+
+    // set canvas size to the size of the window
+    canvas.width = win.window.innerWidth;
+    canvas.height = win.window.innerHeight;
+
+    let layers = nn.nn.Layers;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // add a cream background
+    ctx.fillStyle = "#FFFDD0";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const NeronSize = 5*5;
+    const NeronSpacingX = 50*5;
+    const NeronSpacingY = 15*5;
+
+    function DrawNeron(X, Y, T) {
+
+        // white circle with a black border
+        ctx.beginPath();
+        ctx.arc(X, Y, NeronSize, 0, 2 * Math.PI);
+        // lerp between white and red
+        let color = `rgb(${T * 255}, ${T * 255}, ${T * 255})`
+        ctx.fillStyle = color
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(X, Y, NeronSize, 0, 2 * Math.PI);
+        ctx.strokeStyle = "black";
+        ctx.stroke();
+
+    }
+
+    function DrawConnection(X1, Y1, X2, Y2, T) {
+
+        // lerp between white and red
+        let color = `rgb(${T * 255}, ${T * 255}, ${T * 255})`
+        ctx.strokeStyle = color;
+        // stroke thickness
+        ctx.lineWidth = NeronSize/5;
+        ctx.beginPath();
+        ctx.moveTo(X1, Y1);
+        ctx.lineTo(X2, Y2);
+        ctx.stroke();
+
+    }
+
+    for (let i = 0; i < layers.length; i++) {
+
+        let Thislayer = layers[i];
+        for (let j = 0; j < Thislayer.Neurons.length; j++) {
+
+            if (i == layers.length - 1) break;
+            let nextLayer = layers[i + 1]
+
+            // sort next layer by weight, but dont change the actual layer
+            nextLayer.Neurons.sort((a, b) => {
+                //return b.Connections[j].Weight - a.Connections[j].Weight
+            })
+
+            for (let k = 0; k < nextLayer.Neurons.length; k++) {
+
+                let nextNeuron = nextLayer.Neurons[k];
+
+                //console.log(nextNeuron)
+
+                let X1 = (i + 1) * NeronSpacingX
+                let Y1 = (j + 1) * NeronSpacingY + (canvas.height - (Thislayer.Neurons.length + 1) * NeronSpacingY) / 2
+
+                let X2 = (i + 2) * NeronSpacingX
+                let Y2 = (k + 1) * NeronSpacingY + (canvas.height - (nextLayer.Neurons.length + 1) * NeronSpacingY) / 2
+
+                // t should be the weight * the output of the previous neuron
+                let T = (nextNeuron.Connections[j].Weight * Thislayer.Neurons[j].Output) * 3
+
+                DrawConnection(X1, Y1, X2, Y2, T)
+
+            }
+
+
+        }
+
+        for (let j = 0; j < Thislayer.Neurons.length; j++) {
+
+            let neuron = Thislayer.Neurons[j];
+
+            // draw a small circle for each neuron
+            let X = (i + 1) * NeronSpacingX
+            // the nurons should be 1 pixel apart from each other, and the entire layer should be centered
+            let Y = (j + 1) * NeronSpacingY + (canvas.height - (Thislayer.Neurons.length + 1) * NeronSpacingY) / 2
+
+            DrawNeron(X, Y, neuron.Output)
+
+        }
+
+    }
+
+}
+
+// make popout window to show the neural network
+function PopoutNN() {
+    win.window = window.open("", "Neural Network", "width=600,height=600");
+    win.window.document.body.innerHTML = `<canvas id="nnCanvas" width="300" height="300"></canvas>`
+
+    // add css to the window
+    let style = win.window.document.createElement("style");
+    style.innerHTML = `
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: #FFFDD0;
+    }
+
+    canvas {
+        width: 100%;
+        height: 100%;
+    }
+    `
+    win.window.document.head.appendChild(style)
+
+    RenderNN(loadedAI)
 }
